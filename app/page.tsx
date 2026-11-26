@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Sun,
   Moon,
@@ -11,10 +11,24 @@ import {
   Mail,
   ArrowUpLeft,
   Sparkles,
+  User,
+  Phone,
+  ClipboardList,
+  CheckCircle2,
+  Send,
+  MessageSquareText,
+  Loader2,
 } from "lucide-react";
 
 const WA_RESTAURANT = "966570776673";
 const WA_EVENTS = "966570448580";
+
+/**
+ * ضع رابط Google Apps Script Web App هنا ليتم إرسال كل الطلبات تلقائياً إلى ملف Google Sheet الخاص بك.
+ * (مرفق لك الكود الجاهز في ملف GOOGLE_SHEETS_SETUP.md)
+ */
+const GOOGLE_SHEET_WEBHOOK_URL =
+  process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL || "";
 
 function getWhatsAppUrl(phone: string, text: string) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
@@ -39,76 +53,123 @@ const SERVICES = [
     subtitle: "تشكيلة صباحية طازجة يومياً للأفراد ومكاتب الشركات",
     tag: "يومياً في الصباح",
     phone: WA_RESTAURANT,
-    channelText: "اطلب من المطعم",
+    channelText: "اطلب عبر واتساب المطعم",
     message:
       "مرحباً مطعم واحة فندر، أرغب في طلب / حجز (إفطار صباحي - أفراد وشركات).",
     image: "images/morning-breakfast.png",
     icon: <Sun className="w-5 h-5" />,
-    theme: "olive",
   },
   {
     title: "إفطار رمضان اليومي",
     subtitle: "بوفيه إفطار يومي متكامل بأجواء رمضانية دافئة",
     tag: "بوفيه رمضان",
     phone: WA_RESTAURANT,
-    channelText: "احجز عبر المطعم",
+    channelText: "احجز عبر واتساب المطعم",
     message: "مرحباً مطعم واحة فندر، أرغب في حجز (بوفيه إفطار رمضان اليومي).",
     image: "images/hero-buffet.png",
     icon: <Moon className="w-5 h-5" />,
-    theme: "olive",
   },
   {
     title: "إفطار رمضان للشركات والمجموعات",
     subtitle: "تنظيم مآدب إفطار خاصة للشركات والمجموعات",
     tag: "شركات ومجموعات",
     phone: WA_EVENTS,
-    channelText: "نسّق مع قسم الاحتفالات",
+    channelText: "نسّق عبر واتساب الاحتفالات",
     message:
       "مرحباً واحة فندر، أرغب في تنسيق (إفطار رمضان للشركات والمجموعات).",
     image: "images/ramadan-hall.png",
     icon: <Users className="w-5 h-5" />,
-    theme: "gold",
   },
   {
     title: "وجبات سحور في رمضان",
     subtitle: "أطباق سحور شهية محضرة بعناية للأفراد والمجموعات",
     tag: "ليالي رمضان",
     phone: WA_RESTAURANT,
-    channelText: "اطلب من المطعم",
+    channelText: "اطلب عبر واتساب المطعم",
     message: "مرحباً مطعم واحة فندر، أرغب في طلب (وجبات سحور في رمضان).",
     image: "images/insta-sample.jpeg",
     icon: <Flame className="w-5 h-5" />,
-    theme: "olive",
   },
   {
     title: "بوفيهات واحتفالات حسب الطلب",
     subtitle: "تجهيز بوفيهات فاخرة متكاملة لمناسباتكم الخاصة",
     tag: "ضيافة حسب الطلب",
     phone: WA_EVENTS,
-    channelText: "اطلب من قسم الاحتفالات",
+    channelText: "اطلب عبر واتساب الاحتفالات",
     message:
       "مرحباً واحة فندر، أرغب في طلب (بوفيهات واحتفالات مجهزة حسب الطلب).",
     image: "images/hero-buffet.png",
     icon: <ChefHat className="w-5 h-5" />,
-    theme: "gold",
   },
   {
     title: "باقات احتفالات متنوعة",
     subtitle: "قاعة مجهزة وباقات ضيافة مرنة تناسب كافة مناسباتكم",
     tag: "القاعة والاحتفالات",
     phone: WA_EVENTS,
-    channelText: "احجز القاعة والباقات",
+    channelText: "احجز عبر واتساب الاحتفالات",
     message:
       "مرحباً واحة فندر، أرغب في الاستفسار عن (باقات الاحتفالات المتنوعة وحجز القاعة).",
     image: "images/ramadan-hall.png",
     icon: <PartyPopper className="w-5 h-5" />,
-    theme: "gold",
   },
 ];
 
 export default function VenderOasisLanding() {
+  const [fullName, setFullName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [selectedService, setSelectedService] = useState(SERVICES[0].title);
+  const [notes, setNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // Determine target WhatsApp number based on chosen service
+  const getTargetPhoneForService = (serviceTitle: string) => {
+    const found = SERVICES.find((s) => s.title === serviceTitle);
+    return found ? found.phone : WA_RESTAURANT;
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim() || !phoneNumber.trim()) return;
+
+    setIsSubmitting(true);
+
+    const payload = {
+      timestamp: new Date().toLocaleString("ar-SA"),
+      name: fullName.trim(),
+      phone: phoneNumber.trim(),
+      service: selectedService,
+      notes: notes.trim() || "لا يوجد",
+    };
+
+    try {
+      // Send data to Google Sheets Webhook if configured
+      const sheetUrl =
+        GOOGLE_SHEET_WEBHOOK_URL ||
+        (typeof window !== "undefined"
+          ? localStorage.getItem("VENDER_GOOGLE_SHEET_URL") || ""
+          : "");
+
+      if (sheetUrl) {
+        await fetch(sheetUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8",
+          },
+          body: JSON.stringify(payload),
+        });
+      }
+    } catch (err) {
+      console.error("Google Sheet webhook error:", err);
+    } finally {
+      setIsSubmitting(false);
+      setIsSubmitted(true);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-alabaster-stone text-[#2B3527] flex flex-col justify-between">
+    <div className="min-h-screen bg-alabaster-stone text-[#2B3527] flex flex-col justify-between font-tajawal">
       {/* 1. SERENE FLOATING HEADER */}
       <header className="sticky top-0 z-40 bg-[#F4F1EA]/90 backdrop-blur-md border-b border-[#7D8C6D]/15">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
@@ -120,17 +181,25 @@ export default function VenderOasisLanding() {
               className="w-12 h-12 rounded-2xl object-cover shadow-sm border border-[#C8AA76]/50"
             />
             <div>
-              <span className="block text-lg sm:text-xl font-bold text-[#2B3527] leading-snug">
+              <span className="block text-lg sm:text-xl font-extrabold text-[#2B3527] leading-snug">
                 مطعم واحة فندر
               </span>
-              <span className="block text-[10px] sm:text-xs tracking-widest text-[#6D7C5F] font-semibold uppercase">
+              <span className="block text-[10px] sm:text-xs tracking-widest text-[#6D7C5F] font-bold uppercase">
                 VENDER OASIS RESTAURANT
               </span>
             </div>
           </a>
 
-          {/* Header Calm Olive WhatsApp Button */}
+          {/* Header Actions */}
           <div className="flex items-center gap-2.5">
+            <a
+              href="#booking-form"
+              className="hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#EFECE4] hover:bg-[#E4DFD3] text-[#2B3527] border border-[#C8AA76]/40 text-xs sm:text-sm font-bold transition-all"
+            >
+              <ClipboardList className="w-4 h-4 text-[#6D7C5F]" />
+              <span>سجّل طلبك</span>
+            </a>
+
             <a
               href={getWhatsAppUrl(
                 WA_RESTAURANT,
@@ -138,9 +207,9 @@ export default function VenderOasisLanding() {
               )}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-oasis-olive inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold"
+              className="btn-whatsapp-calm inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold"
             >
-              <WhatsAppIcon className="w-4 h-4 text-[#C8AA76]" />
+              <WhatsAppIcon className="w-4 h-4 text-white" />
               <span>تواصل عبر واتساب</span>
             </a>
           </div>
@@ -153,30 +222,30 @@ export default function VenderOasisLanding() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
             {/* Right Column: Serene Typography & Harmonious WhatsApp CTAs */}
             <div className="lg:col-span-7 space-y-6 text-right">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#EFECE4] border border-[#C8AA76]/40 text-[#5C6B50] text-xs sm:text-sm font-semibold">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#EFECE4] border border-[#C8AA76]/40 text-[#5C6B50] text-xs sm:text-sm font-bold">
                 <Sparkles className="w-4 h-4 text-[#B6955E]" />
                 <span>تجربة ضيافة متكاملة • طعم مميز وأجواء راقية</span>
               </div>
 
-              <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-bold text-[#2B3527] leading-[1.35]">
+              <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-extrabold text-[#2B3527] leading-[1.35]">
                 مرحبًا بكم في{" "}
                 <span className="text-[#5C6B50]">مطعم واحة فندر</span>
               </h1>
 
-              <p className="text-base sm:text-lg text-[#4E5B48] leading-[1.85] font-normal max-w-2xl">
+              <p className="text-base sm:text-lg text-[#4E5B48] leading-[1.85] font-medium max-w-2xl">
                 وجهتكم لتجربة ضيافة متكاملة تجمع بين الطعم المميز والأجواء
                 الراقية. نقدم بوفيهات واحتفالات مجهزة حسب الطلب، مع إفطار صباحي
                 يومي، وخلال رمضان بوفيه إفطار يومي بأجواء رمضانية مميزة.
               </p>
 
               {/* Soft Brand Gold Highlight Strip */}
-              <div className="inline-block bg-[#EFEAE0] border-r-4 border-[#C8AA76] px-4 py-2.5 rounded-l-xl text-xs sm:text-sm font-semibold text-[#3D4B37]">
-                اضغط على القسم المطلوب للطلب أو الحجز مباشرة عبر الواتساب:
+              <div className="inline-block bg-[#EFEAE0] border-r-4 border-[#1E9E52] px-4 py-2.5 rounded-l-xl text-xs sm:text-sm font-bold text-[#2B3527]">
+                اطلب مباشرة عبر الواتساب أو سجّل بياناتك في القائمة أدناه:
               </div>
 
-              {/* Dual Eye-Soothing WhatsApp Buttons (Olive Forest & Warm Champagne Gold) */}
+              {/* Dual Eye-Soothing WhatsApp Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                {/* Button 1: Restaurant WhatsApp (Deep Calm Olive) */}
+                {/* Button 1: Restaurant WhatsApp (Calm Emerald WhatsApp Green) */}
                 <a
                   href={getWhatsAppUrl(
                     WA_RESTAURANT,
@@ -184,31 +253,31 @@ export default function VenderOasisLanding() {
                   )}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn-oasis-olive group rounded-2xl p-4 flex items-center justify-between"
+                  className="btn-whatsapp-calm group rounded-2xl p-4 flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3.5">
-                    <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                      <WhatsAppIcon className="w-6 h-6 text-[#DEC59A]" />
+                    <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                      <WhatsAppIcon className="w-6 h-6 text-white" />
                     </div>
                     <div className="text-right">
-                      <span className="block text-xs text-[#DEC59A] font-medium">
+                      <span className="block text-xs text-white/90 font-medium">
                         طلبات المطعم والإفطار
                       </span>
-                      <span className="block text-base font-bold text-white">
+                      <span className="block text-base font-extrabold text-white">
                         واتساب المطعم
                       </span>
                       <span
                         dir="ltr"
-                        className="block text-xs font-mono text-white/85 mt-0.5"
+                        className="block text-xs font-mono text-white/90 mt-0.5"
                       >
                         +966 057 077 6673
                       </span>
                     </div>
                   </div>
-                  <ArrowUpLeft className="w-5 h-5 text-[#DEC59A] group-hover:-translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  <ArrowUpLeft className="w-5 h-5 text-white group-hover:-translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </a>
 
-                {/* Button 2: Celebrations & Hall WhatsApp (Warm Champagne Gold) */}
+                {/* Button 2: Celebrations & Hall WhatsApp (Calm Deep WhatsApp Teal) */}
                 <a
                   href={getWhatsAppUrl(
                     WA_EVENTS,
@@ -216,28 +285,28 @@ export default function VenderOasisLanding() {
                   )}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn-oasis-gold group rounded-2xl p-4 flex items-center justify-between"
+                  className="btn-whatsapp-deep group rounded-2xl p-4 flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3.5">
-                    <div className="w-11 h-11 rounded-xl bg-[#2B3527]/15 flex items-center justify-center shrink-0">
-                      <WhatsAppIcon className="w-6 h-6 text-[#2B3527]" />
+                    <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                      <WhatsAppIcon className="w-6 h-6 text-white" />
                     </div>
                     <div className="text-right">
-                      <span className="block text-xs text-[#2B3527]/80 font-medium">
+                      <span className="block text-xs text-white/90 font-medium">
                         للبوفيهات والمناسبات
                       </span>
-                      <span className="block text-base font-bold text-[#2B3527]">
-                        الاحتفالات والقاعة
+                      <span className="block text-base font-extrabold text-white">
+                        واتساب الاحتفالات والقاعة
                       </span>
                       <span
                         dir="ltr"
-                        className="block text-xs font-mono font-semibold text-[#2B3527]/90 mt-0.5"
+                        className="block text-xs font-mono text-white/90 mt-0.5"
                       >
                         +966 057 044 8580
                       </span>
                     </div>
                   </div>
-                  <ArrowUpLeft className="w-5 h-5 text-[#2B3527] group-hover:-translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  <ArrowUpLeft className="w-5 h-5 text-white group-hover:-translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </a>
               </div>
             </div>
@@ -253,14 +322,14 @@ export default function VenderOasisLanding() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#242D20]/80 via-transparent to-transparent flex items-end justify-between p-4">
                     <div>
-                      <p className="text-white font-bold text-sm sm:text-base">
+                      <p className="text-white font-extrabold text-sm sm:text-base">
                         بوفيهات وضيافة واحة فندر
                       </p>
-                      <p className="text-[#E6D5B8] text-xs">
+                      <p className="text-[#E6D5B8] text-xs font-medium">
                         إفطار صباحي • بوفيه رمضان • احتفالات
                       </p>
                     </div>
-                    <span className="px-3 py-1 rounded-full bg-[#C8AA76] text-[#242D20] text-xs font-bold">
+                    <span className="px-3 py-1 rounded-full bg-[#C8AA76] text-[#242D20] text-xs font-extrabold">
                       حسب الطلب
                     </span>
                   </div>
@@ -273,10 +342,10 @@ export default function VenderOasisLanding() {
         {/* 3. SERENE SERVICES GRID (6 Services - Direct WhatsApp Conversion) */}
         <section className="space-y-8">
           <div className="text-center max-w-xl mx-auto space-y-2">
-            <span className="inline-block text-xs font-semibold text-[#6D7C5F] bg-[#EAE6DC] px-3.5 py-1 rounded-full">
+            <span className="inline-block text-xs font-bold text-[#6D7C5F] bg-[#EAE6DC] px-3.5 py-1 rounded-full">
               خدمات الضيافة
             </span>
-            <h2 className="text-2xl sm:text-3xl font-bold text-[#2B3527]">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-[#2B3527]">
               اختر خدمتك واطلب مباشرة عبر الواتساب
             </h2>
           </div>
@@ -298,7 +367,7 @@ export default function VenderOasisLanding() {
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     />
-                    <span className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-semibold bg-[#2B3527]/80 text-[#F4ECE0] backdrop-blur-md">
+                    <span className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-[#2B3527]/80 text-[#F4ECE0] backdrop-blur-md">
                       {item.tag}
                     </span>
                   </div>
@@ -309,27 +378,21 @@ export default function VenderOasisLanding() {
                       <div className="w-9 h-9 rounded-xl bg-[#EFECE4] text-[#5C6B50] flex items-center justify-center shrink-0">
                         {item.icon}
                       </div>
-                      <h3 className="text-lg font-bold text-[#2B3527] leading-snug">
+                      <h3 className="text-lg font-extrabold text-[#2B3527] leading-snug">
                         {item.title}
                       </h3>
                     </div>
-                    <p className="text-xs sm:text-sm text-[#5C6856] leading-relaxed pr-11">
+                    <p className="text-xs sm:text-sm text-[#5C6856] leading-relaxed pr-11 font-medium">
                       {item.subtitle}
                     </p>
                   </div>
                 </div>
 
-                {/* Calm Harmonious Action Bar */}
-                <div
-                  className={`w-full py-3 px-4 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-between transition-all ${
-                    item.theme === "olive"
-                      ? "bg-[#EFECE4] group-hover:bg-[#3D4B37] text-[#2B3527] group-hover:text-white"
-                      : "bg-[#F3ECE0] group-hover:bg-[#C8AA76] text-[#2B3527]"
-                  }`}
-                >
+                {/* Calm Eye-Friendly WhatsApp Action Button */}
+                <div className="btn-whatsapp-calm w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <WhatsAppIcon className="w-4 h-4 text-[#5C6B50] group-hover:text-current transition-colors" />
-                    <span>{item.channelText} (واتساب)</span>
+                    <WhatsAppIcon className="w-4 h-4 text-white" />
+                    <span>{item.channelText}</span>
                   </div>
                   <ArrowUpLeft className="w-4 h-4" />
                 </div>
@@ -338,17 +401,227 @@ export default function VenderOasisLanding() {
           </div>
         </section>
 
-        {/* 4. CALM & CLEAR CONTACT SECTION */}
+        {/* 4. ELEGANT BOOKING & SERVICE SELECTION FORM (Connected to Google Sheets + WhatsApp) */}
+        <section
+          id="booking-form"
+          className="rounded-[32px] bg-[#FAF8F4] border border-[#C8AA76]/45 shadow-[0_22px_55px_-18px_rgba(43,53,39,0.12)] overflow-hidden"
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-12">
+            {/* Right Decorative & Info Panel */}
+            <div className="lg:col-span-5 bg-gradient-to-bl from-[#7D8C6D] to-[#5F6F50] text-white p-8 sm:p-10 flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 text-xs font-bold">
+                  <ClipboardList className="w-4 h-4 text-[#F3DFB9]" />
+                  <span>تسجيل طلب أو حجز سريع</span>
+                </div>
+
+                <h3 className="text-2xl sm:text-3xl font-extrabold leading-snug">
+                  سجّل بياناتك واختر الخدمة المطلوبة
+                </h3>
+
+                <p className="text-sm sm:text-base text-white/90 leading-relaxed font-medium">
+                  اختر الخدمة التي ترغب بها من قائمة خدماتنا (إفطار صباحي، بوفيه
+                  وسحور رمضان، أو باقات الاحتفالات)، وسيتم حفظ طلبك فوراً والتواصل
+                  معك.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-4 border-t border-white/20 text-xs sm:text-sm">
+                <div className="flex items-center gap-2.5 text-white/95 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-[#F3DFB9] shrink-0" />
+                  <span>تسجيل فوري ومباشر في قاعدة بيانات الطلبات</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-white/95 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-[#F3DFB9] shrink-0" />
+                  <span>إمكانية إرسال نسخة فورية إلى الواتساب بضغطة زر</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Left Form Panel */}
+            <div className="lg:col-span-7 p-6 sm:p-10">
+              {!isSubmitted ? (
+                <form onSubmit={handleFormSubmit} className="space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {/* Customer Name */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-bold text-[#2B3527]">
+                        الاسم الكريم <span className="text-[#1E9E52]">*</span>
+                      </label>
+                      <div className="relative">
+                        <User className="w-4 h-4 text-[#6D7C5F] absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          required
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="أدخل اسمك الكامل"
+                          className="oasis-input w-full pr-11 pl-4 py-3.5 rounded-2xl text-sm font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Phone Number */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-bold text-[#2B3527]">
+                        رقم الجوال <span className="text-[#1E9E52]">*</span>
+                      </label>
+                      <div className="relative">
+                        <Phone className="w-4 h-4 text-[#6D7C5F] absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="tel"
+                          required
+                          dir="ltr"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          placeholder="05XXXXXXXX"
+                          className="oasis-input w-full pr-11 pl-4 py-3.5 rounded-2xl text-sm font-medium text-right"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Service Dropdown List */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-bold text-[#2B3527]">
+                      اختر الخدمة المطلوبة{" "}
+                      <span className="text-[#1E9E52]">*</span>
+                    </label>
+                    <div className="relative">
+                      <ClipboardList className="w-4 h-4 text-[#6D7C5F] absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <select
+                        value={selectedService}
+                        onChange={(e) => setSelectedService(e.target.value)}
+                        className="oasis-input w-full pr-11 pl-4 py-3.5 rounded-2xl text-sm font-bold cursor-pointer"
+                      >
+                        {SERVICES.map((s, i) => (
+                          <option key={i} value={s.title}>
+                            {s.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Optional Notes / Number of Guests / Date */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-bold text-[#2B3527]">
+                      تفاصيل إضافية (العدد أو الموعد - اختياري)
+                    </label>
+                    <div className="relative">
+                      <MessageSquareText className="w-4 h-4 text-[#6D7C5F] absolute right-4 top-4 pointer-events-none" />
+                      <textarea
+                        rows={3}
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="مثال: حجز لشخصين يوم الجمعة، أو بوفيه شركة لـ 25 شخص في رمضان..."
+                        className="oasis-input w-full pr-11 pl-4 py-3 rounded-2xl text-sm font-medium resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Buttons */}
+                  <div className="pt-2 flex flex-col sm:flex-row gap-3.5">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="btn-whatsapp-calm flex-1 py-4 px-6 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 disabled:opacity-60"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>جاري تسجيل طلبك...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>تأكيد وتسجيل الطلب</span>
+                        </>
+                      )}
+                    </button>
+
+                    <a
+                      href={getWhatsAppUrl(
+                        getTargetPhoneForService(selectedService),
+                        `مرحباً واحة فندر،\nالاسم: ${
+                          fullName || "---"
+                        }\nرقم الجوال: ${
+                          phoneNumber || "---"
+                        }\nالخدمة المطلوبة: ${selectedService}\nملاحظات: ${
+                          notes || "لا يوجد"
+                        }`
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-4 px-5 rounded-2xl bg-[#EFECE4] hover:bg-[#E4DFD3] text-[#2B3527] border border-[#C8AA76]/45 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all"
+                    >
+                      <WhatsAppIcon className="w-4 h-4 text-[#1E9E52]" />
+                      <span>إرسال مباشر عبر واتساب</span>
+                    </a>
+                  </div>
+                </form>
+              ) : (
+                <div className="py-8 px-4 text-center space-y-5">
+                  <div className="w-16 h-16 rounded-full bg-[#1E9E52]/15 text-[#1E9E52] flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-9 h-9" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <h4 className="text-2xl font-extrabold text-[#2B3527]">
+                      تم تسجيل طلبك بنجاح، {fullName}!
+                    </h4>
+                    <p className="text-sm sm:text-base text-[#5C6856] font-medium">
+                      الخدمة المختارة:{" "}
+                      <span className="font-bold text-[#2B3527]">
+                        {selectedService}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <a
+                      href={getWhatsAppUrl(
+                        getTargetPhoneForService(selectedService),
+                        `مرحباً واحة فندر، قمت بتسجيل طلبي في الموقع:\nالاسم: ${fullName}\nالجوال: ${phoneNumber}\nالخدمة: ${selectedService}\nالتفاصيل: ${
+                          notes || "لا يوجد"
+                        }`
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-whatsapp-calm py-3.5 px-6 rounded-2xl font-extrabold text-sm inline-flex items-center gap-2"
+                    >
+                      <WhatsAppIcon className="w-5 h-5" />
+                      <span>تأكيد الطلب عبر الواتساب الآن</span>
+                    </a>
+
+                    <button
+                      onClick={() => {
+                        setIsSubmitted(false);
+                        setFullName("");
+                        setPhoneNumber("");
+                        setNotes("");
+                      }}
+                      className="py-3.5 px-5 rounded-2xl bg-[#EFECE4] hover:bg-[#E4DFD3] text-[#2B3527] font-bold text-xs sm:text-sm transition-colors"
+                    >
+                      تسجيل طلب جديد
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* 5. CALM & CLEAR CONTACT SECTION */}
         <section className="rounded-[28px] bg-[#7D8C6D] text-white p-6 sm:p-10 shadow-lg">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
             <div className="lg:col-span-4 space-y-2 text-right">
-              <span className="inline-block text-xs font-semibold bg-white/15 px-3 py-1 rounded-full text-white">
+              <span className="inline-block text-xs font-bold bg-white/15 px-3 py-1 rounded-full text-white">
                 تواصل مباشر
               </span>
-              <h3 className="text-2xl font-bold text-white">
+              <h3 className="text-2xl font-extrabold text-white">
                 أرقام الطلب والحجز
               </h3>
-              <p className="text-sm text-white/90 leading-relaxed">
+              <p className="text-sm text-white/90 leading-relaxed font-medium">
                 اضغط على الرقم للتحويل المباشر إلى محادثة الواتساب
               </p>
             </div>
@@ -365,20 +638,20 @@ export default function VenderOasisLanding() {
                 className="bg-[#FAF8F4] hover:bg-white text-[#2B3527] rounded-2xl p-5 flex items-center justify-between gap-3 transition-all shadow-sm"
               >
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-[#5C6B50]">
+                  <span className="text-xs font-bold text-[#1E9E52]">
                     معلومات التواصل للمطعم
                   </span>
                   <p
                     dir="ltr"
-                    className="text-lg sm:text-xl font-bold font-mono text-[#2B3527] text-right"
+                    className="text-lg sm:text-xl font-extrabold font-mono text-[#2B3527] text-right"
                   >
                     +966 057 077 6673
                   </p>
-                  <span className="block text-xs text-[#6D7C5F]">
+                  <span className="block text-xs text-[#6D7C5F] font-medium">
                     اضغط لفتح واتساب المطعم
                   </span>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-[#3D4B37] text-[#DEC59A] flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-[#1E9E52] text-white flex items-center justify-center shrink-0 shadow-sm">
                   <WhatsAppIcon className="w-6 h-6" />
                 </div>
               </a>
@@ -394,20 +667,20 @@ export default function VenderOasisLanding() {
                 className="bg-[#FAF8F4] hover:bg-white text-[#2B3527] rounded-2xl p-5 flex items-center justify-between gap-3 transition-all shadow-sm"
               >
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-[#947644]">
+                  <span className="text-xs font-bold text-[#127866]">
                     للاحتفالات والقاعة
                   </span>
                   <p
                     dir="ltr"
-                    className="text-lg sm:text-xl font-bold font-mono text-[#2B3527] text-right"
+                    className="text-lg sm:text-xl font-extrabold font-mono text-[#2B3527] text-right"
                   >
                     +966 057 044 8580
                   </p>
-                  <span className="block text-xs text-[#947644]">
+                  <span className="block text-xs text-[#127866] font-medium">
                     اضغط لفتح واتساب الاحتفالات
                   </span>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-[#C8AA76] text-[#2B3527] flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-[#127866] text-white flex items-center justify-center shrink-0 shadow-sm">
                   <WhatsAppIcon className="w-6 h-6" />
                 </div>
               </a>
@@ -416,7 +689,7 @@ export default function VenderOasisLanding() {
         </section>
       </main>
 
-      {/* 5. MINIMAL FOOTER */}
+      {/* 6. MINIMAL FOOTER */}
       <footer className="border-t border-[#7D8C6D]/15 bg-[#ECE8DF] py-6 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-[#4E5B48]">
           <div className="flex items-center gap-2.5">
@@ -425,7 +698,7 @@ export default function VenderOasisLanding() {
               alt="واحة فندر"
               className="w-7 h-7 rounded-lg object-cover"
             />
-            <span className="font-bold text-[#2B3527]">
+            <span className="font-extrabold text-[#2B3527]">
               مطعم واحة فندر — VENDER OASIS RESTAURANT
             </span>
           </div>
