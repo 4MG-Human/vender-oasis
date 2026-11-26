@@ -40,40 +40,25 @@ body {
   box-shadow: 0 22px 45px -14px rgba(43, 53, 39, 0.12);
 }
 
-/* Eye-Friendly Authentic WhatsApp Emerald Button (Rich & Soft, Not Neon) */
-.btn-whatsapp-calm {
-  background: linear-gradient(135deg, #1E9E52 0%, #178544 100%);
+/* Unified Official WhatsApp Green Button (Comfortable & Clear for ALL WhatsApp buttons) */
+.btn-whatsapp {
+  background: linear-gradient(135deg, #22B55B 0%, #1B9A4B 100%);
   color: #FFFFFF;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 10px 24px -8px rgba(23, 133, 68, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 10px 24px -6px rgba(27, 154, 75, 0.4);
   transition: all 0.3s ease;
 }
 
-.btn-whatsapp-calm:hover {
-  background: linear-gradient(135deg, #198C47 0%, #137039 100%);
+.btn-whatsapp:hover {
+  background: linear-gradient(135deg, #1EA351 0%, #16823F 100%);
   transform: translateY(-2px);
-  box-shadow: 0 15px 30px -8px rgba(23, 133, 68, 0.5);
-}
-
-/* Secondary WhatsApp Teal-Olive Button for Events/Hall */
-.btn-whatsapp-deep {
-  background: linear-gradient(135deg, #127866 0%, #0E5E50 100%);
-  color: #FFFFFF;
-  border: 1px solid rgba(200, 170, 118, 0.35);
-  box-shadow: 0 10px 24px -8px rgba(14, 94, 80, 0.38);
-  transition: all 0.3s ease;
-}
-
-.btn-whatsapp-deep:hover {
-  background: linear-gradient(135deg, #0F6657 0%, #0A4D41 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 15px 30px -8px rgba(14, 94, 80, 0.5);
+  box-shadow: 0 15px 30px -6px rgba(27, 154, 75, 0.55);
 }
 
 /* Form Input Styling */
 .oasis-input {
   background-color: #F4F1EA;
-  border: 1.5px solid rgba(125, 140, 109, 0.28);
+  border: 1.5px solid rgba(125, 140, 109, 0.32);
   color: #2B3527;
   transition: all 0.25s ease;
 }
@@ -81,8 +66,8 @@ body {
 .oasis-input:focus {
   outline: none;
   background-color: #FFFFFF;
-  border-color: #1E9E52;
-  box-shadow: 0 0 0 4px rgba(30, 158, 82, 0.12);
+  border-color: #1B9A4B;
+  box-shadow: 0 0 0 4px rgba(34, 181, 91, 0.14);
 }
 
 /* Custom Scrollbar */
