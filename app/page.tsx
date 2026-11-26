@@ -24,7 +24,8 @@ const WA_RESTAURANT = "966570776673";
 const WA_EVENTS = "966570448580";
 
 const GOOGLE_SHEET_WEBHOOK_URL =
-  process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL || "";
+  process.env.NEXT_PUBLIC_GOOGLE_SHEET_URL ||
+  "https://script.google.com/macros/s/AKfycbwJ12Vv7ibOxTU2hqh428IaJTMYMHfg6-X5eLL02ZYa8OEQ1U7rG4jAE4izrW-EF_9o/exec";
 
 function getWhatsAppUrl(phone: string, text: string) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
