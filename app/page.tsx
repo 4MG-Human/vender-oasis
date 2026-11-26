@@ -125,19 +125,36 @@ export default function VenderOasisLanding() {
     return found ? found.phone : WA_RESTAURANT;
   };
 
+  const scrollToBookingForm = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const formEl = document.getElementById("booking-form");
+    if (formEl) {
+      formEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !phoneNumber.trim()) return;
 
     setIsSubmitting(true);
 
+    const cleanName = fullName.trim();
+    const cleanPhone = phoneNumber.trim();
+    const cleanNotes = notes.trim() || "لا يوجد";
+
     const payload = {
       timestamp: new Date().toLocaleString("ar-SA"),
-      name: fullName.trim(),
-      phone: phoneNumber.trim(),
+      name: cleanName,
+      phone: cleanPhone,
       service: selectedService,
-      notes: notes.trim() || "لا يوجد",
+      notes: cleanNotes,
     };
+
+    const waUrl = getWhatsAppUrl(
+      getTargetPhoneForService(selectedService),
+      `مرحباً مطعم واحة فندر،\nقمت بتسجيل طلبي في الموقع:\n• الاسم: ${cleanName}\n• رقم الجوال: ${cleanPhone}\n• الخدمة المطلوبة: ${selectedService}\n• تفاصيل إضافية: ${cleanNotes}`
+    );
 
     try {
       const sheetUrl =
@@ -161,6 +178,9 @@ export default function VenderOasisLanding() {
     } finally {
       setIsSubmitting(false);
       setIsSubmitted(true);
+      if (typeof window !== "undefined") {
+        window.location.href = waUrl;
+      }
     }
   };
 
@@ -190,7 +210,8 @@ export default function VenderOasisLanding() {
           <div className="flex items-center gap-2.5">
             <a
               href="#booking-form"
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#EFECE4] hover:bg-[#E4DFD3] text-[#2B3527] border border-[#C8AA76]/40 text-xs sm:text-sm font-bold transition-all"
+              onClick={scrollToBookingForm}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#EFECE4] hover:bg-[#E4DFD3] text-[#2B3527] border border-[#C8AA76]/40 text-xs sm:text-sm font-bold transition-all cursor-pointer"
             >
               <ClipboardList className="w-4 h-4 text-[#6D7C5F]" />
               <span>سجّل طلبك</span>
@@ -397,10 +418,10 @@ export default function VenderOasisLanding() {
           </div>
         </section>
 
-        {/* 4. ELEGANT BOOKING & SERVICE SELECTION FORM (Connected to Google Sheets + WhatsApp) */}
+        {/* 4. ELEGANT BOOKING & SERVICE SELECTION FORM (Connected to Google Sheets + Automatic WhatsApp Redirect) */}
         <section
           id="booking-form"
-          className="rounded-[32px] bg-[#FAF8F4] border border-[#C8AA76]/45 shadow-[0_22px_55px_-18px_rgba(43,53,39,0.12)] overflow-hidden"
+          className="scroll-mt-24 rounded-[32px] bg-[#FAF8F4] border border-[#C8AA76]/45 shadow-[0_22px_55px_-18px_rgba(43,53,39,0.12)] overflow-hidden"
         >
           <div className="grid grid-cols-1 lg:grid-cols-12">
             {/* Right Decorative & Info Panel */}
@@ -516,44 +537,25 @@ export default function VenderOasisLanding() {
                     </div>
                   </div>
 
-                  {/* Submit Buttons */}
-                  <div className="pt-2 flex flex-col sm:flex-row gap-3.5">
+                  {/* Single Submit Button: Saves to Google Sheets then automatically redirects to WhatsApp */}
+                  <div className="pt-2">
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="btn-whatsapp flex-1 py-4 px-6 rounded-2xl font-extrabold text-sm sm:text-base text-white flex items-center justify-center gap-2.5 disabled:opacity-60"
+                      className="btn-whatsapp w-full py-4 px-6 rounded-2xl font-extrabold text-sm sm:text-base text-white flex items-center justify-center gap-2.5 disabled:opacity-60"
                     >
                       {isSubmitting ? (
                         <>
                           <Loader2 className="w-5 h-5 animate-spin text-white" />
-                          <span>جاري تسجيل طلبك...</span>
+                          <span>جاري حفظ الطلب وتحويلك للواتساب...</span>
                         </>
                       ) : (
                         <>
-                          <Send className="w-4 h-4 text-white" />
-                          <span>تأكيد وتسجيل الطلب</span>
+                          <WhatsAppIcon className="w-5 h-5 text-white" />
+                          <span>تأكيد الطلب والمتابعة إلى الواتساب</span>
                         </>
                       )}
                     </button>
-
-                    <a
-                      href={getWhatsAppUrl(
-                        getTargetPhoneForService(selectedService),
-                        `مرحباً واحة فندر،\nالاسم: ${
-                          fullName || "---"
-                        }\nرقم الجوال: ${
-                          phoneNumber || "---"
-                        }\nالخدمة المطلوبة: ${selectedService}\nملاحظات: ${
-                          notes || "لا يوجد"
-                        }`
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-whatsapp py-4 px-5 rounded-2xl font-extrabold text-xs sm:text-sm text-white flex items-center justify-center gap-2"
-                    >
-                      <WhatsAppIcon className="w-5 h-5 text-white" />
-                      <span>إرسال مباشر عبر واتساب</span>
-                    </a>
                   </div>
                 </form>
               ) : (
